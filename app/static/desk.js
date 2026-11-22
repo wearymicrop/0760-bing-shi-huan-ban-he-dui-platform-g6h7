@@ -61,3 +61,48 @@ file.addEventListener('change', () => {
 });
 rerun?.addEventListener('click', () => submit(`/api/runs/${runId}/rerun`, {}, false));
 document.querySelector('#print')?.addEventListener('click', () => print());
+
+const correctionForm = document.querySelector('#correction-form');
+const correctionFeedback = document.querySelector('#correction-feedback');
+correctionForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const fileInput = document.querySelector('#correction-file');
+    const reason = document.querySelector('#correction-reason').value.trim();
+    if (!fileInput.files.length || !reason) {
+        correctionFeedback.textContent = '请同时提供更正依据文件与更正理由。';
+        return;
+    }
+    const data = new FormData();
+    data.append('source', fileInput.files[0]);
+    data.append('reason', reason);
+    data.append('operator', document.querySelector('#correction-operator').value.trim());
+    data.append('idempotency_key', document.querySelector('#correction-idem').value.trim());
+    const button = correctionForm.querySelector('button[type="submit"]');
+    button.disabled = true;
+    correctionFeedback.textContent = '正在登记更正…';
+    try {
+        const response = await fetch(`/api/runs/${runId}/corrections`, {method: 'POST', body: data});
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || '更正登记失败。');
+        correctionFeedback.textContent = response.status === 200
+            ? '该更正已存在，复用原凭证，未新增第二份。'
+            : '更正已登记，等待复核生效。';
+        setTimeout(() => location.reload(), 650);
+    } catch (error) {
+        correctionFeedback.textContent = error.message;
+        button.disabled = false;
+    }
+});
+
+document.querySelectorAll('.review-btn').forEach(button => button.addEventListener('click', async () => {
+    button.disabled = true;
+    try {
+        const response = await fetch(`/api/corrections/${button.dataset.review}/review`, {method: 'POST'});
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || '复核失败。');
+        location.reload();
+    } catch (error) {
+        button.disabled = false;
+        correctionFeedback && (correctionFeedback.textContent = error.message);
+    }
+}));

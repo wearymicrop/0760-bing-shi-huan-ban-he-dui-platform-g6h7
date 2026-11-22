@@ -10,6 +10,9 @@ MESSAGES = {
     'STALE_EVENT': '修订号已被后续事件替代', 'AFTER_CLOSE': '事件晚于结账截点',
     'BAD_CHAIN': '没有完整的新订与改单链', 'COLLISION': '同场冰面时段重叠',
     'CANCELED': '该预订已撤销', 'LIMIT': '权益分钟额用尽',
+    'BAD_CORRECTION': '更正请求缺少更正依据或更正理由',
+    'CORRECTION_NO_CHANGE': '更正依据与原批次完全相同，没有可生效的更正',
+    'CORRECTION_MISSING': '找不到更正凭证',
 }
 
 

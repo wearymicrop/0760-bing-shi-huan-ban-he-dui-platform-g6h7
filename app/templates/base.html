@@ -27,6 +27,23 @@
     </div>
   </header>
   <div id="run-feedback" role="status"></div>
+  {% if correction_info %}
+  <section class="version-banner {{ 'is-current' if correction_info.is_current else 'is-superseded' }}"
+           aria-label="当前可用版本">
+    {% if correction_info.is_current and correction_info.correction_id %}
+      <span class="seal">当前可用 · 更正生效</span>
+      <span>本页是更正后版本，原批次 <a href="{{ url_for('pages.page', module='archive', run=correction_info.original_id) }}"><code>{{ correction_info.original_id[:12] }}</code></a> 保持封存可追溯。</span>
+      <a class="solid mini" href="{{ url_for('archive.export_correction', correction_id=correction_info.correction_id) }}">下载更正凭证</a>
+    {% elif correction_info.is_current %}
+      <span class="seal">当前可用 · 原批次</span>
+      <span>本批次尚无生效更正，记录为原始封存版本。</span>
+    {% else %}
+      <span class="seal">已被更正 · 仅供追溯</span>
+      <span>该批次已交接并封存，账目不再改写；当前可用版本为
+        <a href="{{ url_for('pages.page', module=module, run=correction_info.current_id) }}"><code>{{ correction_info.current_id[:12] }}</code></a>。</span>
+    {% endif %}
+  </section>
+  {% endif %}
   <section class="kpis" aria-label="当前账簿指标">
     {% for metric,value in view.metrics.items() %}
       <div class="kpi"><b>{{ value }}</b><span>{{ metric }}</span></div>

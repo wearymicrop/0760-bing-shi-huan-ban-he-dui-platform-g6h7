@@ -3,7 +3,113 @@
 {% block feature %}
 <section class="panel proof">
   <div class="panel-top"><h2>封存凭证</h2><a class="solid" href="{{ url_for('archive.export_run',run_id=run.id) }}">下载复核凭证</a></div>
-  <dl class="proof-list"><dt>输入摘要</dt><dd>{{ view.manifest.input_sha256 }}</dd><dt>结果摘要</dt><dd>{{ view.manifest.result_sha256 }}</dd><dt>生成时间</dt><dd>{{ view.manifest.created_at }}</dd><dt>运算耗时</dt><dd>{{ view.manifest.elapsed_ms }} ms</dd></dl>
+  <dl class="proof-list"><dt>批次号</dt><dd><code>{{ run.id[:12] }}</code></dd><dt>输入摘要</dt><dd>{{ view.manifest.input_sha256 }}</dd><dt>结果摘要</dt><dd>{{ view.manifest.result_sha256 }}</dd><dt>生成时间</dt><dd>{{ view.manifest.created_at }}</dd><dt>运算耗时</dt><dd>{{ view.manifest.elapsed_ms }} ms</dd></dl>
   <div class="seal-actions"><button id="rerun" type="button">复算本批</button><button id="print" type="button">打印账簿</button></div>
+</section>
+
+<section class="panel proof correction-desk" aria-label="更正台账">
+  <div class="panel-top"><h2>更正台账</h2>
+    <span class="badge">{{ view.corrections.chain|length }} 份更正 ·
+      {% if view.corrections.is_current %}当前可用版本 <code>{{ view.corrections.current_id[:12] }}</code>
+      {% else %}原批次仍为当前可用{% endif %}</span>
+  </div>
+
+  <div class="version-line">
+    <span class="version-chip {{ 'chip-current' if view.corrections.is_current else 'chip-superseded' }}">
+      原批次 <code>{{ run.id[:12] }}</code>
+    </span>
+    {% for entry in view.corrections.chain %}
+    <span class="version-arrow" aria-hidden="true">→</span>
+    <span class="version-chip chip-{{ entry.status }}">
+      {{ '待复核' if entry.status == 'pending' else '已生效' }}版本 <code>{{ entry.corrected_id[:12] }}</code>
+    </span>
+    {% endfor %}
+    <span class="version-arrow" aria-hidden="true">⇒</span>
+    <span class="version-chip chip-current">当前可用 <code>{{ view.corrections.current_id[:12] }}</code></span>
+  </div>
+
+  {% if view.corrections.chain %}
+  <div class="correction-list">
+    {% for entry in view.corrections.chain %}
+    <article class="correction-card" data-correction="{{ entry.id }}">
+      <div class="panel-top">
+        <h3>更正凭证 <code>{{ entry.id[:12] }}</code>
+          <span class="status-tag status-{{ entry.status }}">{{ '待复核' if entry.status == 'pending' else '已生效' }}</span>
+        </h3>
+        <div class="seal-actions">
+          <a class="solid mini" href="{{ url_for('archive.export_correction', correction_id=entry.id) }}">下载更正凭证</a>
+          <a class="mini" href="{{ url_for('pages.page', module='archive', run=entry.corrected_id) }}">打开更正后批次</a>
+          {% if entry.status == 'pending' %}
+          <button class="mini review-btn" type="button" data-review="{{ entry.id }}">复核生效</button>
+          {% endif %}
+        </div>
+      </div>
+      <dl class="proof-list">
+        <dt>更正理由</dt><dd>{{ entry.reason }}</dd>
+        <dt>经办人</dt><dd>{{ entry.operator or '—' }}</dd>
+        <dt>承接版本</dt><dd><code>{{ entry.supersedes_id[:12] }}</code></dd>
+        <dt>登记时间</dt><dd>{{ entry.created_at }}</dd>
+        {% if entry.reviewed_at %}<dt>复核时间</dt><dd>{{ entry.reviewed_at }}</dd>{% endif %}
+        <dt>依据摘要</dt><dd>{{ entry.manifest.basis_sha256 }}</dd>
+      </dl>
+      <div class="impact">
+        <h4>更正影响</h4>
+        <ul class="impact-summary">
+          <li>源记录变动 <b>{{ entry.impact.summary.source_rows_changed }}</b> 行</li>
+          <li>受影响预订 <b>{{ entry.impact.summary.bookings_changed }}</b> 单</li>
+          <li>受影响权益 <b>{{ entry.impact.summary.vouchers_changed }}</b> 项</li>
+          <li>争议新增 <b>{{ entry.impact.summary.issues_added }}</b> / 消解 <b>{{ entry.impact.summary.issues_removed }}</b></li>
+        </ul>
+        {% if entry.impact.tally %}
+        <table class="impact-table">
+          <thead><tr><th scope="col">对账口径</th><th scope="col">原批次</th><th scope="col">更正后</th><th scope="col">差额</th></tr></thead>
+          <tbody>
+          {% for row in entry.impact.tally %}
+            <tr><td>{{ row.field|tally_label }}</td><td class="num">{{ row.before }}</td><td class="num">{{ row.after }}</td>
+              <td class="num {{ 'up' if row.delta > 0 else 'down' }}">{{ '%+d'|format(row.delta) }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+        <details class="impact-detail">
+          <summary>展开逐单与源行影响（{{ entry.impact.summary.bookings_changed }} 单 / {{ entry.impact.summary.source_rows_changed }} 行）</summary>
+          <div class="impact-cols">
+            <div><h5>逐单分钟</h5>
+              <ul class="delta-list">
+              {% for row in entry.impact.bookings %}
+                <li><span class="delta-key">{{ row.kind|kind_label }} {{ row.key }}</span>
+                  <span class="delta-fields">{% for f, d in row.changes.items() %}{{ f }} {{ '%+d'|format(d) }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+                </li>
+              {% else %}<li>无逐单变化</li>{% endfor %}
+              </ul>
+            </div>
+            <div><h5>源记录依据</h5>
+              <ul class="delta-list">
+              {% for row in entry.impact.sources %}
+                <li><span class="delta-key">{{ row.section|section_label }} 第 {{ row.line }} 行{% if row.original_line %}（原第 {{ row.original_line }} 行）{% endif %} · {{ row.kind|kind_label }}</span>
+                  <span class="delta-fields">{{ row.key or '—' }}</span></li>
+              {% else %}<li>无源行变化</li>{% endfor %}
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form class="correction-form" id="correction-form">
+    <h3>登记更正（原批次不改动，另存可追溯更正版本）</h3>
+    <label class="choice"><span>更正依据 JSON（更正后的完整时段记录）</span>
+      <input id="correction-file" type="file" accept=".json,application/json" required></label>
+    <label class="choice"><span>更正理由</span>
+      <input id="correction-reason" type="text" maxlength="300" placeholder="例如：0042 时券版本误录，午夜后应扣新券" required></label>
+    <label class="choice"><span>经办人</span><input id="correction-operator" type="text" maxlength="60" placeholder="值班组 / 财务复核人"></label>
+    <label class="choice"><span>幂等键（可选，留空按依据与理由自动生成）</span>
+      <input id="correction-idem" type="text" maxlength="120" placeholder="重复提交同一键不会产生第二份更正"></label>
+    <div class="seal-actions"><button class="solid" type="submit">登记更正</button></div>
+    <p class="form-feedback" id="correction-feedback" role="status"></p>
+  </form>
 </section>
 {% endblock %}

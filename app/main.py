@@ -4,7 +4,7 @@ from .config import DATABASE, MAX_BYTES
 from .errors import InputError
 from .modules.archive.handler import routes
 from .reasons import MESSAGES
-from .web import pages
+from .web import kind_label, pages, section_label, tally_label
 
 
 def create_app(database=DATABASE):
@@ -12,6 +12,9 @@ def create_app(database=DATABASE):
     app.config.update(DB_PATH=database, MAX_CONTENT_LENGTH=MAX_BYTES + 16_384)
     app.register_blueprint(routes)
     app.register_blueprint(pages)
+    app.add_template_filter(kind_label, 'kind_label')
+    app.add_template_filter(section_label, 'section_label')
+    app.add_template_filter(tally_label, 'tally_label')
 
     @app.get('/health')
     def health():

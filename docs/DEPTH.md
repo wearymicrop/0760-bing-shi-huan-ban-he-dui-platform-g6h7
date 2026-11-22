@@ -13,6 +13,7 @@
 | M5 有效折抵 | 点击跨日片段检查扣券和自付分钟 | `/desk/debit` | `app/modules/debit/partition.py` `app/modules/debit/service.py` | `tests/test_debit.py` |
 | M6 时券对账 | 复核分钟等式和差额，展开争议证据 | `/desk/balance` | `app/modules/balance/rules.py` `app/modules/balance/service.py` | `tests/test_balance.py` |
 | M7 值班归档 | 复算原输入、切换历史批次和下载凭证 | `/desk/archive` | `app/modules/archive/handler.py` `app/modules/archive/service.py` | `tests/test_archive.py` |
+| M8 更正台账 | 登记误录更正、复核生效并导出相连凭证 | `/desk/archive` | `app/modules/archive/corrections.py` `app/modules/archive/service.py` `app/store.py` | `tests/test_corrections.py` |
 
 ## 陷阱登记
 
@@ -28,6 +29,9 @@
 | TRAP-23 | 夜场西冰 22:15 恰好换类 | 两个窗口重复收权 | 半开区间 | `app/modules/calendar/rules.py` | `tests/test_calendar.py::test_adjacent_boundary_has_single_owner` |
 | TRAP-25 | 夜场飞雪两张券期间重叠 | 随意扣券责任 | 停扣重叠片段并给出双方权益行 | `app/modules/passes/rules.py` | `tests/test_passes.py::test_overlapping_entitlements_hold_minutes` |
 | TRAP-26 | 夜场 `0042` 撤销跨过当班截点 | 改写已交接预订 | 延后事件待下班，保持本班有效订单 | `app/modules/changes/rules.py` | `tests/test_changes.py::test_late_cancellation_cannot_rewrite_published_view` |
+| TRAP-27 | 财务交接后发现时券/营业窗误录 | 直接覆盖已交接批次，原凭证丢失 | 原批次只读，另追加挂接原批次的更正记录，复核后才生效 | `app/modules/archive/service.py` `app/store.py` | `tests/test_corrections.py::test_correction_keeps_original_batch_immutable` |
+| TRAP-28 | 同一更正被重试或复核两次 | 生成第二份更正、重复调账 | 唯一索引 `(original_id,idempotency_key)` 与幂等复核，重复请求返回同一凭证 | `app/store.py` `app/modules/archive/service.py` | `tests/test_corrections.py::test_retry_same_correction_does_not_create_second` `tests/test_corrections.py::test_concurrent_correction_publishes_single_entry` |
+| TRAP-29 | 多份更正后找不到当前可用版本 | 各批次并列，接班无从继续对账 | 更正链 `supersedes_id` 串联，取最近 `effective` 版本，待复核不顶替当前版本 | `app/modules/archive/service.py` | `tests/test_corrections.py::test_chain_walks_multiple_corrections_to_latest_effective` |
 
 ## 对账规则
 

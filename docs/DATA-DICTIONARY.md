@@ -22,3 +22,22 @@
 每个有效预订分钟拆为扣券、自付、豁免、争议。每券的核发分钟等于已用加剩余。复核账按单检查，另检查全场扣券总数和券已用总数。
 
 凭证导出一个 JSON，内含原始交换文本、完整阶段结论及运行清单。`input_sha256` 对上传原字节计算，`result_sha256` 对排序字段的 UTF-8 JSON 结果计算。样例中的现金列是待自付分钟，价格由票务系统维护。
+
+## 更正凭证
+
+更正不改写已交接批次，而是在 `corrections` 表追加一条只读记录，并把更正后的完整记录按同一算式独立封存为新批次。
+
+| 字段 | 含义 |
+|---|---|
+| `id`,`original_id`,`supersedes_id`,`corrected_id` | 更正号、原批次号、承接的上一版本号、更正后封存批次号 |
+| `idempotency_key` | 幂等键。留空按「原批次 + 更正依据 + 理由」自动生成；同 `(original_id, idempotency_key)` 重试只返回同一凭证 |
+| `reason`,`operator`,`status`,`created_at`,`reviewed_at` | 更正理由、经办人、`pending`/`effective` 状态、登记与复核时刻 |
+| `manifest.basis_sha256` | 更正依据（更正后源文件）字节摘要 |
+| `manifest.original_*`,`manifest.corrected_*` | 原批次与更正后批次各自的输入/结果摘要，用于相互核对 |
+| `impact.tally` | 对账口径前后值与差额（仅列发生变化的口径） |
+| `impact.bookings`,`impact.vouchers` | 逐单分钟、逐权益分钟额的新增/移除/变更 |
+| `impact.issues` | 争议复核条目的新增与消解 |
+| `impact.sources` | 源行级依据，按业务身份键配对，`modified` 同时保留 `before`/`after` 与双方源行号 |
+| `impact.summary` | 上述各类变化的计数与更正前后是否对平 |
+
+当前可用版本沿更正链取最近一份 `effective` 更正；没有生效更正时仍是原批次，`pending` 更正不顶替当前版本。`GET /api/corrections/{id}/export` 导出的 JSON 同时包含原批次、更正后批次、更正依据与影响，三批次以哈希相连。
